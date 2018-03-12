@@ -8,10 +8,6 @@ import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.Scanner;
 
-/**
- *
- * @author danielbeta
- */
 public class Cliente {
     
     public static void main (String args[]) 
@@ -22,6 +18,9 @@ public class Cliente {
 
 		try
 		{
+                    while(true)
+                    {
+                        
 			int serverPort = 2317;
 
 			System.out.println("CLIENT: connecting to server");
@@ -33,15 +32,14 @@ public class Cliente {
 			DataInputStream in = new DataInputStream(s.getInputStream());
 			DataOutputStream out = new DataOutputStream(s.getOutputStream());
 
-			while(true)
-			{
+			
 				System.out.print("CLIENT: enter text: ");
 
 				String input = sc.nextLine().trim();
 
 				System.out.println("CLIENT: sending data to server");
 
-				out.write((" " + input).getBytes());
+				out.write((input).getBytes());
 
 				out.flush();
 
@@ -54,7 +52,7 @@ public class Cliente {
 
 				System.out.println("CLIENT: receiving data from server");
 
-				byte[] bytes = new byte[in.read()];
+				byte[] bytes = new byte[100];
 
                                 /* Almacena los bytes de la peticion del cliente */
                                 in.read(bytes);               

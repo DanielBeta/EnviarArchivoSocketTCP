@@ -1,15 +1,10 @@
 package servidor;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
+import interfaces.Consola;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.logging.Level;
@@ -21,7 +16,9 @@ import java.util.logging.Logger;
  */
 public class Servidor {
     
-    public final int PUERTO;  // you may change this
+    private Consola consola;
+    private final Red RED;
+    private final int PUERTO;  // you may change this
     
     private FileInputStream fis;
     private DataInputStream entrada;
@@ -35,10 +32,10 @@ public class Servidor {
     private String peticion;
     private String respuesta;
 
-    public Servidor() throws IOException{
+    public Servidor() throws IOException, Exception{
         
-        this.PUERTO = 2317;
-        this.subir();
+        this.RED = new Red();
+        this.PUERTO = this.RED.obtenerPuerto();
     }
     
 //    public void subir() throws IOException{
@@ -72,9 +69,13 @@ public class Servidor {
 //        }
 //    }
     
-    
-    public void subir() throws IOException{
+    public void asignarConsola(Consola consola){
         
+        this.consola = consola;
+    }
+    
+    public void subir() throws IOException, Exception{
+  
         try {
 
           servidor = new ServerSocket(PUERTO);
@@ -82,14 +83,14 @@ public class Servidor {
           while (true) {
 
             this.mensaje="[SERVIDOR] Esperando cliente...";
-            System.out.println(this.mensaje);
+            this.consola.mostrarMensajesServidor(this.mensaje);
             this.peticion="";
             
             try {
                 
                 cliente = servidor.accept();
                 this.mensaje="[SERVIDOR] Conexion establecida con el cliente: " + cliente; 
-                System.out.println(this.mensaje);
+                this.consola.mostrarMensajesServidor(this.mensaje);
                 
                 entrada = new DataInputStream(cliente.getInputStream());
                 salida = new DataOutputStream(cliente.getOutputStream());
@@ -101,12 +102,11 @@ public class Servidor {
                  **************************************************************/
                 
                     this.mensaje="[SERVIDOR] Esperando peticion del cliente...";
-                    System.out.println(this.mensaje);
+                    this.consola.mostrarMensajesServidor(this.mensaje);
 
                     /*  Crea el arreglo de bytes con el tamaño de bytes de la peticion del cliente. 
                         La peticion debe preceder del caracter virgulilla desde el lado del cliente.*/
-                    
-                    byte[] bytes = new byte[entrada.read()];
+                    byte[] bytes = new byte[100];
                     
                     /* Almacena los bytes de la peticion del cliente */
                     entrada.read(bytes);               
@@ -115,24 +115,26 @@ public class Servidor {
                     for(byte b : bytes)
                         this.peticion += (char)b;
                     
-                    this.mensaje="[SERVIDOR] Esta es la peticion del cliente: \"" + this.peticion  + "\".";
-                    System.out.println(this.mensaje);
+                    this.mensaje="[SERVIDOR] Esta es la peticion del cliente: " + this.peticion;
+                    this.consola.mostrarMensajesServidor(this.mensaje);
                 
                 /**************************************************************
                  * 
                  * FIN DEL BLOQUE
                  * 
-                 **************************************************************/
-                   
-                 /*  */   
-                //byte[] respuestaBytes = new Protocolo().gestionarPeticion();
+                 **************************************************************/ 
                     
-                this.respuesta="Usted ha solicitado: \"" + this.peticion + "\".";
+                this.respuesta="Usted ha solicitado: " + this.peticion + "";
+                
+                this.evaluarRespuesta(new Protocolo().gestionarPeticion(this.peticion));
+                
                 this.mensaje="[SERVIDOR] Responder al cliente: " + this.respuesta;
-                System.out.println(this.mensaje);
-                salida.write((" " + this.respuesta).getBytes());
+                this.consola.mostrarMensajesServidor(this.mensaje);
+                salida.write((this.respuesta).getBytes());
+                salida.flush();
                 
             } finally {
+                
               if (entrada != null) entrada.close();
               if (salida != null) salida.close();
               if (cliente!=null) cliente.close();
@@ -142,6 +144,16 @@ public class Servidor {
             
           if (servidor != null) servidor.close();
         }
+    }
+    
+    public void evaluarRespuesta(String respuesta){
+        
+        this.respuesta = respuesta;
+    }
+    
+    public String obtenerIP(){
+        
+        return this.RED.obtenerIp();
     }
     
     /*
@@ -163,10 +175,22 @@ public class Servidor {
     
     public static void main(String[] args) {
         
+        Servidor s;
+        Consola c;
+        
         try {
-            Servidor s = new Servidor();
-        } catch (IOException ex) {
+            
+            s = new Servidor();
+            
+            c = new Consola(s);
+            c.setLocationRelativeTo(null);
+            c.setVisible(true);
+            
+            s.asignarConsola(c);
+            s.subir();
+            } catch (Exception ex) {
+                
             Logger.getLogger(Servidor.class.getName()).log(Level.SEVERE, null, ex);
-        }
+        } 
     }
 }
