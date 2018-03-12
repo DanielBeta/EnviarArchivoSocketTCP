@@ -1,5 +1,6 @@
 package servidor;
 
+import controladores.Protocolo;
 import interfaces.Consola;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -7,6 +8,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -16,6 +18,7 @@ import java.util.logging.Logger;
  */
 public class Servidor {
     
+    private Protocolo protocolo;
     private Consola consola;
     private final Red RED;
     private final int PUERTO;  // you may change this
@@ -36,6 +39,8 @@ public class Servidor {
         
         this.RED = new Red();
         this.PUERTO = this.RED.obtenerPuerto();
+        
+        this.protocolo = new Protocolo();
     }
     
 //    public void subir() throws IOException{
@@ -126,13 +131,8 @@ public class Servidor {
                     
                 this.respuesta="Usted ha solicitado: " + this.peticion + "";
                 
-                this.evaluarRespuesta(new Protocolo().gestionarPeticion(this.peticion));
-                
-                this.mensaje="[SERVIDOR] Responder al cliente: " + this.respuesta;
-                this.consola.mostrarMensajesServidor(this.mensaje);
-                salida.write((this.respuesta).getBytes());
-                salida.flush();
-                
+                /* Analiza la peticion proveniente del cliente */
+                this.evaluarRespuesta(this.protocolo.gestionarPeticion(this.peticion.substring(1)));   
             } finally {
                 
               if (entrada != null) entrada.close();
@@ -146,14 +146,54 @@ public class Servidor {
         }
     }
     
-    public void evaluarRespuesta(String respuesta){
+    public void evaluarRespuesta(String respuesta) throws Exception{
+        
+        if(respuesta.equals(this.protocolo.archivoNoEncontradoComando()))
+            if(this.peticion.startsWith("C"))
+                this.buscarArchivoLAN("S" + this.peticion.substring(1));
         
         this.respuesta = respuesta;
+        
+        this.mensaje="[SERVIDOR] Responder al cliente: " + this.respuesta;
+        this.consola.mostrarMensajesServidor(this.mensaje);
+        salida.write((this.respuesta).getBytes());
+        salida.flush();
     }
     
     public String obtenerIP(){
         
         return this.RED.obtenerIp();
+    }
+    
+    private void buscarArchivoLAN(String peticion) throws Exception{
+        
+        String respuesta = "";
+        ArrayList<String> ips = this.RED.obtenerIPSEnRed();
+        int puerto = this.RED.obtenerPuerto();
+        
+        for(String ip : ips){
+            
+            Socket s = new Socket(ip, puerto);
+            
+            DataInputStream in = new DataInputStream(s.getInputStream());
+            DataOutputStream out = new DataOutputStream(s.getOutputStream());
+
+            out.write(respuesta.getBytes());
+
+            out.flush();
+            
+            byte[] bytes = new byte[100];
+
+            in.read(bytes);       
+
+            for(byte b : bytes)
+                respuesta += (char)b;
+
+            this.respuesta = respuesta;
+            
+            if(!this.respuesta.equals(this.protocolo.archivoNoEncontradoComando()))
+                break;
+        }
     }
     
     /*

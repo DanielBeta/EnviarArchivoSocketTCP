@@ -9,7 +9,7 @@ import java.util.ArrayList;
  */
 public class Repositorio {
 
-    private final String CARACTER_SEPARACION="-";
+    private final String CARACTER_SEPARACION="|";
     private final String CARACTER_SALTO=";";
     private ArrayList<ArchivoMusica> archivos;
     
