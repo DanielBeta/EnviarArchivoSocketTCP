@@ -6,6 +6,7 @@ package controladores;
  */
 public class Protocolo {
 
+    private final String DESCARGAR_ARCHIVO="0010";
     private final String ARCHIVO_NO_ENCONTRADO="Archivo no encontrado";
     private final String CARACTER_SEPARACION="\\|";
     private Repositorio repositorio;
@@ -20,7 +21,7 @@ public class Protocolo {
 
     public String gestionarPeticion(String peticion) {
         
-       String[] peticionPartes = peticion.split(this.CARACTER_SEPARACION);
+       String[] peticionPartes = peticion.substring(1).split(this.CARACTER_SEPARACION);
        String respuesta="";
        
        switch(peticionPartes[0]){
@@ -28,7 +29,7 @@ public class Protocolo {
            /* Listar todos los archivos que esten en el repositorio */
            case "0000" : {
                
-               respuesta = "Listar canciones.";
+               respuesta = this.repositorio.listarCanciones();
                break;
            }
            
@@ -43,11 +44,15 @@ public class Protocolo {
                break;
            }
            
-           /* buscar archivo en repositorio */
+           /* descargar archivo en repositorio remoto */
            case "0010" : {
                
-               respuesta = "Descargar archivo a repositorio local.";
-               break;
+                if(peticion.startsWith("S"))
+                    respuesta = this.archivador.getRutaRepositorio() + peticionPartes[1];
+                else
+                    respuesta = this.DESCARGAR_ARCHIVO;
+                
+                break;
            }
            
            case "0011" : {
@@ -79,4 +84,12 @@ public class Protocolo {
         
         return this.ARCHIVO_NO_ENCONTRADO;
     }
+
+    public String descargarArchivoComando() {
+        return this.DESCARGAR_ARCHIVO;
+    }
+
+    public String obtenerPathRepositorio() { return this.archivador.getRutaRepositorio(); }
+
+    public String comandoSeparacion() { return this.CARACTER_SEPARACION; }
 }

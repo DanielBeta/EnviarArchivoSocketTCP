@@ -38,6 +38,7 @@ public final class Red {
         this.ipsConectadas = new ArrayList<>();
         
         this.obtenerProtocoloRedEquipoLocal();
+        this.ipsConectadas.add("192.168.0.2");
         //this.escanearIPSConectadasARed();
     }
     

@@ -2,10 +2,15 @@ package servidor;
 
 import controladores.Protocolo;
 import interfaces.Consola;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -23,7 +28,6 @@ public class Servidor {
     private final Red RED;
     private final int PUERTO;  // you may change this
     
-    private FileInputStream fis;
     private DataInputStream entrada;
     private DataOutputStream salida;
     private ServerSocket servidor = null;
@@ -42,37 +46,6 @@ public class Servidor {
         
         this.protocolo = new Protocolo();
     }
-    
-//    public void subir() throws IOException{
-//        
-//        ServerSocket servidor = new ServerSocket(PUERTO);
-//        
-//        while(true){
-//            
-//           
-//            System.out.println("Esperando cliente...");
-//            
-//            Socket cliente = servidor.accept();
-//            System.out.println("Cliente Aceptado.");
-//
-//            DataInputStream in = new DataInputStream(cliente.getInputStream());
-//            DataOutputStream out = new DataOutputStream(cliente.getOutputStream());
-//
-//            byte[] bytes = new byte[cliente.getInputStream().read()];
-//            System.out.println(bytes.length);
-//
-//            /* Almacena los bytes de la peticion del cliente */
-//            in.read(bytes);               
-//
-//            /* Construye la peticion del cliente*/
-//            for(byte b : bytes)
-//                this.peticion += (char)b;
-//
-//            System.out.println(this.peticion);
-//
-//            out.write(bytes);
-//        }
-//    }
     
     public void asignarConsola(Consola consola){
         
@@ -129,10 +102,10 @@ public class Servidor {
                  * 
                  **************************************************************/ 
                     
-                this.respuesta="Usted ha solicitado: " + this.peticion + "";
-                
+                this.respuesta = this.protocolo.gestionarPeticion(this.peticion);
+                    
                 /* Analiza la peticion proveniente del cliente */
-                this.evaluarRespuesta(this.protocolo.gestionarPeticion(this.peticion.substring(1)));   
+                this.evaluarRespuesta(this.respuesta);   
             } finally {
                 
               if (entrada != null) entrada.close();
@@ -148,16 +121,38 @@ public class Servidor {
     
     public void evaluarRespuesta(String respuesta) throws Exception{
         
-        if(respuesta.equals(this.protocolo.archivoNoEncontradoComando()))
-            if(this.peticion.startsWith("C"))
-                this.buscarArchivoLAN("S" + this.peticion.substring(1));
+        if(respuesta.startsWith(this.protocolo.obtenerPathRepositorio())){
+         
+            File myFile = new File (respuesta);
+            byte [] mybytearray  = new byte [(int)myFile.length()];
+            FileInputStream fis = new FileInputStream(myFile);
+            BufferedInputStream bis = new BufferedInputStream(fis);
+            bis.read(mybytearray,0,mybytearray.length);
+
+            this.respuesta = "Enviando archivo: " + respuesta;
+            this.mensaje="[SERVIDOR] Responder al cliente: " + this.respuesta;
+            this.consola.mostrarMensajesServidor(this.mensaje);
+
+            salida.write(mybytearray,0,mybytearray.length);
+            salida.flush();       
+        } else {
         
-        this.respuesta = respuesta;
-        
-        this.mensaje="[SERVIDOR] Responder al cliente: " + this.respuesta;
-        this.consola.mostrarMensajesServidor(this.mensaje);
-        salida.write((this.respuesta).getBytes());
-        salida.flush();
+            if(respuesta.equals(this.protocolo.archivoNoEncontradoComando())){
+                if(this.peticion.startsWith("C")){
+                    this.buscarArchivoLAN("S" + this.peticion.substring(1));
+                }
+            } else {
+
+                if(respuesta.equals(this.protocolo.descargarArchivoComando())){
+                    this.buscarArchivoLAN("S" + this.peticion.substring(1));
+                } 
+            }
+            
+            this.mensaje="[SERVIDOR] Responder al cliente: " + this.respuesta;
+            this.consola.mostrarMensajesServidor(this.mensaje);
+            salida.write((this.respuesta).getBytes());
+            salida.flush();
+        }
     }
     
     public String obtenerIP(){
@@ -173,22 +168,35 @@ public class Servidor {
         
         for(String ip : ips){
             
-            Socket s = new Socket(ip, puerto);
+            this.mensaje="[SERVIDOR] Buscar archivo donde mi amiguito " + ip;
+            this.consola.mostrarMensajesServidor(this.mensaje);
             
+            Socket s = new Socket(ip, puerto);
+                   
             DataInputStream in = new DataInputStream(s.getInputStream());
             DataOutputStream out = new DataOutputStream(s.getOutputStream());
 
-            out.write(respuesta.getBytes());
-
+            out.write(peticion.getBytes());
             out.flush();
             
-            byte[] bytes = new byte[100];
+            if(peticion.contains(this.protocolo.descargarArchivoComando())){
+                this.descargarArchivoLAN(s, peticion);
+                this.respuesta = "Archivo descargado.";
+            }
+            else{
+            
+                byte[] bytes = new byte[100];
 
-            in.read(bytes);       
+                in.read(bytes);       
 
-            for(byte b : bytes)
-                respuesta += (char)b;
-
+                for(byte b : bytes)
+                    respuesta += (char)b;
+            }
+            
+            s.close();
+            in.close();
+            out.close();
+            
             this.respuesta = respuesta;
             
             if(!this.respuesta.equals(this.protocolo.archivoNoEncontradoComando()))
@@ -196,22 +204,27 @@ public class Servidor {
         }
     }
     
-    /*
-    public void transferirArchivo(){
+    private void descargarArchivoLAN(Socket s, String peticion) throws Exception{
+  
+        int bytesRead, current=0;
+
+        byte [] mybytearray  = new byte [100];
+        InputStream is = s.getInputStream();
+        String ruta = this.protocolo.obtenerPathRepositorio() + peticion.split(this.protocolo.comandoSeparacion())[1];
+        FileOutputStream fos = new FileOutputStream(ruta.trim());
+        BufferedOutputStream bos = new BufferedOutputStream(fos);
+        bytesRead = is.read(mybytearray,0,mybytearray.length);
+        current = bytesRead;
+
+        do {
+           bytesRead =
+              is.read(mybytearray, current, (mybytearray.length-current));
+           if(bytesRead >= 0) current += bytesRead;
+        } while(bytesRead > -1);
         
-        
-                
-                File myFile = new File (FILE_TO_SEND);
-                byte [] mybytearray  = new byte [(int)myFile.length()];
-                fis = new FileInputStream(myFile);
-                entrada = new BufferedInputStream(fis);
-                entrada.read(mybytearray,0,mybytearray.length);
-                salida = cliente.getOutputStream();
-                System.out.println("Sending " + FILE_TO_SEND + "(" + mybytearray.length + " bytes)");
-                salida.write(mybytearray,0,mybytearray.length);
-                salida.flush();
-    }*/
-    
+        bos.write(mybytearray, 0 , current);
+        bos.flush();
+    }
     
     public static void main(String[] args) {
         
