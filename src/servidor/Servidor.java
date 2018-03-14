@@ -11,11 +11,15 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLServerSocketFactory;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
 
 /**
  *
@@ -30,8 +34,9 @@ public class Servidor {
     
     private DataInputStream entrada;
     private DataOutputStream salida;
-    private ServerSocket servidor = null;
-    private Socket cliente = null;
+    //private ServerSocket servidor = null;
+    private SSLServerSocket servidor = null;
+    private SSLSocket cliente = null;
     
     
     
@@ -56,7 +61,11 @@ public class Servidor {
   
         try {
 
-          servidor = new ServerSocket(PUERTO);
+          //servidor = new ServerSocket(PUERTO);
+            SSLServerSocketFactory sslServerSocketFactory = (SSLServerSocketFactory) 
+            SSLServerSocketFactory.getDefault();
+            this.servidor = (SSLServerSocket) 
+            sslServerSocketFactory.createServerSocket(PUERTO);
 
           while (true) {
 
@@ -66,7 +75,7 @@ public class Servidor {
             
             try {
                 
-                cliente = servidor.accept();
+                cliente = (SSLSocket)servidor.accept();
                 this.mensaje="[SERVIDOR] Conexion establecida con el cliente: " + cliente; 
                 this.consola.mostrarMensajesServidor(this.mensaje);
                 
@@ -82,9 +91,7 @@ public class Servidor {
                     this.mensaje="[SERVIDOR] Esperando peticion del cliente...";
                     this.consola.mostrarMensajesServidor(this.mensaje);
 
-                    /*  Crea el arreglo de bytes con el tamaño de bytes de la peticion del cliente. 
-                        La peticion debe preceder del caracter virgulilla desde el lado del cliente.*/
-                    byte[] bytes = new byte[100];
+                    byte[] bytes = new byte[10000];
                     
                     /* Almacena los bytes de la peticion del cliente */
                     entrada.read(bytes);               
@@ -123,7 +130,7 @@ public class Servidor {
         
         if(respuesta.startsWith(this.protocolo.obtenerPathRepositorio())){
          
-            File myFile = new File (respuesta);
+            File myFile = new File (respuesta.replaceAll("//", "/").trim());
             byte [] mybytearray  = new byte [(int)myFile.length()];
             FileInputStream fis = new FileInputStream(myFile);
             BufferedInputStream bis = new BufferedInputStream(fis);
@@ -134,7 +141,7 @@ public class Servidor {
             this.consola.mostrarMensajesServidor(this.mensaje);
 
             salida.write(mybytearray,0,mybytearray.length);
-            salida.flush();       
+            salida.flush(); 
         } else {
         
             if(respuesta.equals(this.protocolo.archivoNoEncontradoComando())){
@@ -151,7 +158,7 @@ public class Servidor {
             this.mensaje="[SERVIDOR] Responder al cliente: " + this.respuesta;
             this.consola.mostrarMensajesServidor(this.mensaje);
             salida.write((this.respuesta).getBytes());
-            salida.flush();
+            salida.flush();            
         }
     }
     
@@ -162,6 +169,8 @@ public class Servidor {
     
     private void buscarArchivoLAN(String peticion) throws Exception{
         
+        
+        
         String respuesta = "";
         ArrayList<String> ips = this.RED.obtenerIPSEnRed();
         int puerto = this.RED.obtenerPuerto();
@@ -171,7 +180,13 @@ public class Servidor {
             this.mensaje="[SERVIDOR] Buscar archivo donde mi amiguito " + ip;
             this.consola.mostrarMensajesServidor(this.mensaje);
             
-            Socket s = new Socket(ip, puerto);
+           // Socket s = new Socket(ip, puerto);
+            SSLSocket s;
+            
+            SSLSocketFactory sslSocketFactory = (SSLSocketFactory) 
+            SSLSocketFactory.getDefault();
+            s = (SSLSocket) 
+            sslSocketFactory.createSocket(ip, puerto);
                    
             DataInputStream in = new DataInputStream(s.getInputStream());
             DataOutputStream out = new DataOutputStream(s.getOutputStream());
@@ -224,9 +239,17 @@ public class Servidor {
         
         bos.write(mybytearray, 0 , current);
         bos.flush();
+        
+        this.protocolo.gestionarPeticion("S"+this.protocolo.ACTUALIZAR_REPOSITORIO);
     }
     
     public static void main(String[] args) {
+        
+        System.setProperty("javax.net.ssl.keyStore","myKeystone.jks");
+        System.setProperty("javax.net.ssl.keyStorePassword","d1053837737d.");
+        
+        System.setProperty("javax.net.ssl.trustStore", "myKeystone.jks");
+        System.setProperty("javax.net.ssl.trustStorePassword", "d1053837737d.");
         
         Servidor s;
         Consola c;
@@ -246,4 +269,6 @@ public class Servidor {
             Logger.getLogger(Servidor.class.getName()).log(Level.SEVERE, null, ex);
         } 
     }
+    
+    
 }

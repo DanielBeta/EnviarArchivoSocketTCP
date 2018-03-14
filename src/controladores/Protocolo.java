@@ -7,6 +7,9 @@ package controladores;
 public class Protocolo {
 
     private final String DESCARGAR_ARCHIVO="0010";
+    public final String ACTUALIZAR_REPOSITORIO="0011";
+    public final String REMOVER_ARCHIVO="0100";
+    public final String CARGAR_ARCHIVO="0101";
     private final String ARCHIVO_NO_ENCONTRADO="Archivo no encontrado";
     private final String CARACTER_SEPARACION="\\|";
     private Repositorio repositorio;
@@ -19,7 +22,7 @@ public class Protocolo {
         this.repositorio.cargarObjetos(this.archivador.cargarArchivos());
     }
 
-    public String gestionarPeticion(String peticion) {
+    public String gestionarPeticion(String peticion) throws Exception {
         
        String[] peticionPartes = peticion.substring(1).split(this.CARACTER_SEPARACION);
        String respuesta="";
@@ -55,20 +58,27 @@ public class Protocolo {
                 break;
            }
            
-           case "0011" : {
+           case ACTUALIZAR_REPOSITORIO : {
                
-               respuesta = "Publicar archivo en repositorio remoto.";
+               this.archivador.vaciarArchivo();
+               this.repositorio.cargarObjetos(this.archivador.cargarArchivos());
                break;
            }
            
-           case "0100" : {
+           case REMOVER_ARCHIVO : {
                
-               respuesta = "Cambiar estado de transferencia.";
+               this.archivador.removerArchivo(peticionPartes[1]);
+               this.archivador.vaciarArchivo();
+               this.repositorio.cargarObjetos(this.archivador.cargarArchivos());
+               respuesta = "Se ha removido el archivo: " + peticionPartes[1];
                break;
            }
            
-           case "0101" : {
+           case CARGAR_ARCHIVO : {
                
+               this.archivador.cargarArchivos(peticionPartes[1]);
+               this.archivador.vaciarArchivo();
+               this.repositorio.cargarObjetos(this.archivador.cargarArchivos());
                respuesta = "Cargar archivo a respositorio local.";
                break;
            }
@@ -92,4 +102,5 @@ public class Protocolo {
     public String obtenerPathRepositorio() { return this.archivador.getRutaRepositorio(); }
 
     public String comandoSeparacion() { return this.CARACTER_SEPARACION; }
+
 }

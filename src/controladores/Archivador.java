@@ -3,6 +3,7 @@ package controladores;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -10,6 +11,7 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import servidor.Red;
 
 /**
  * Manejador de archivos.
@@ -130,7 +132,7 @@ public class Archivador {
         for(File fichero : ficheros){
             
             partesFichero[0] = fichero.getName();
-            partesFichero[1] = "COMPARTIDO";
+            partesFichero[1] = new Red().obtenerIp();
             partesFichero[2] = "";
             
             nombresArchivos.add(partesFichero);
@@ -144,4 +146,29 @@ public class Archivador {
         
         return this.rutaRepositorio;
     }
+    
+    public void vaciarArchivo() throws FileNotFoundException, IOException{ 
+        
+        FileWriter archivo;
+        String rutaArchivo = null; 
+    
+        rutaArchivo = this.rutaRepositorio + this.nombreArchivo;
+        archivo = new FileWriter(rutaArchivo);
+        PrintWriter pw = new PrintWriter(archivo);
+        pw.write("");
+    }
+
+    public void removerArchivo(String nombreArchivo) {
+        
+        File archivo = new File((this.rutaRepositorio+nombreArchivo).trim());
+        
+        if(archivo.delete());
+    }
+
+    void cargarArchivos(String ruta) throws FileNotFoundException {
+        
+        ruta = ((this.getRutaRepositorio()+ruta.split("/")[ruta.split("/").length-1]).replace("//", "/")).trim();
+        new FileOutputStream(ruta.trim());
+    }
+    
 }

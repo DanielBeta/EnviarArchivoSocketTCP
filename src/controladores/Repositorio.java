@@ -26,12 +26,18 @@ public class Repositorio {
         this.archivos.add(archivo);
     }
     
-    public void removerArchivo(ArchivoMusica archivo) throws Exception{
+    public void removerArchivo(String nombreArchivo) throws Exception{
         
-        if(archivo == null)
-            throw new Exception("Archivo no existe.");
+        int indiceArchivo = -1;
         
-        this.archivos.remove(archivo);
+        for(int i=0; i<this.archivos.size(); i++)
+            if(this.archivos.get(i).getNombreArchivo().equals(nombreArchivo)){
+                
+                indiceArchivo=i;
+                break;                
+            }
+        
+        this.archivos.remove(indiceArchivo);
     }
 
     public String buscarArchivo(String nombreArchivo) {
