@@ -1,101 +1,86 @@
 package cliente;
 
+import conexiones.cliente.Conexion;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.EOFException;
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
 import java.net.Socket;
-import java.net.UnknownHostException;
-import java.util.Scanner;
+import servidor.Red;
 
+/**
+ *
+ * @author danielbeta
+ */
 public class Cliente {
+
+    private final boolean esSegura;
+    private final Conexion conexion;
+    private final Red RED;
+    private final String IP;
+    private final int PUERTO;
     
-    public static void main (String args[]) 
-	{
-		Socket s = null;
+    public Cliente(boolean esSegura) throws Exception{
+        
+        this.RED = new Red();
+        this.IP = this.RED.obtenerIp();
+        this.PUERTO = this.RED.obtenerPuerto();
+        
+        this.esSegura = esSegura;
+        
+        if(this.esSegura){ this.conexion = new conexiones.cliente.Segura(this.IP, this.PUERTO); } 
+        else { this.conexion = new conexiones.cliente.Insegura(this.IP, this.PUERTO); }   
+    }
+    
+    public String enviarMensajeServidor(String mensaje) throws Exception{
+         
+        String peticion = null;
+        DataInputStream in = null;
+        DataOutputStream out = null;
+        
+        try {
+            
+            this.conexion.crearConexion();
+            System.out.println("CLIENT: connecting to server");
+            
+            this.conexion.establecerES(in, out);
+            System.out.println("CLIENT: extracting I/O streams");
 
-		Scanner sc = new Scanner(System.in);
+            in = this.conexion.obtenerEntrada();
+            out = this.conexion.obtenerSalida();
 
-		try
-		{
-                    while(true)
-                    {
-                        
-			int serverPort = 2317;
 
-			System.out.println("CLIENT: connecting to server");
+            System.out.println("CLIENT: sending data to server");
 
-			s = new Socket("127.0.0.1", serverPort);
+            out.write(("C" + (mensaje) + "|").getBytes());
 
-			System.out.println("CLIENT: extracting I/O streams");
+            out.flush();
 
-			DataInputStream in = new DataInputStream(s.getInputStream());
-			DataOutputStream out = new DataOutputStream(s.getOutputStream());
+            System.out.println("CLIENT: receiving data from server");
 
-			
-				System.out.print("CLIENT: enter text: ");
+            byte[] bytes = new byte[100];
 
-				String input = sc.nextLine().trim();
+            /* Almacena los bytes de la peticion del cliente */
+            in.read(bytes);               
 
-				System.out.println("CLIENT: sending data to server");
+           peticion = "";
 
-				out.write((input).getBytes());
+            /* Construye la peticion del cliente*/
+            for(byte b : bytes)
+                peticion += (char)b;
 
-				out.flush();
 
-				if(input.equals("bye"))
-				{
-					System.out.println("RESPONSE: goodbye!");
+            System.out.println("RESPONSE: " + peticion);
+        } catch (IOException ex) {
+            Logger.getLogger(Cliente.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        
+        System.out.println(peticion);
+        return peticion;
+    }
 
-					break;
-				}
-
-				System.out.println("CLIENT: receiving data from server");
-
-				byte[] bytes = new byte[100];
-
-                                /* Almacena los bytes de la peticion del cliente */
-                                in.read(bytes);               
-
-                                String peticion = "";
-                                
-                                /* Construye la peticion del cliente*/
-                                for(byte b : bytes)
-                                    peticion += (char)b;
-                    
-
-				System.out.println("RESPONSE: " + peticion);
-			}
-		}
-		catch(ArrayIndexOutOfBoundsException e)
-		{
-			System.out.println("Use: java TCPHashClient <server address>");
-		}
-		catch (UnknownHostException e)
-		{
-			System.out.println("Sock:" + e.getMessage());
-		} 
-		catch (EOFException e)
-		{
-			System.out.println("EOF:" + e.getMessage());
-		} 
-		catch (IOException e)
-		{	
-			System.out.println("IO:" + e.getMessage());
-		} 
-		finally 
-		{
-			if(s != null) 
-				try 
-				{
-					System.out.println("CLIENT: closing socket");
-
-					s.close();
-				}
-				catch (IOException e)
-				{
-					/*close failed*/
-				}
-		}
-	}
+    public String obtenerIp() { return this.IP; }
 }

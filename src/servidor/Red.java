@@ -1,6 +1,10 @@
 package servidor;
 
+import conexiones.cliente.Conexion;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.UnknownHostException;
@@ -21,12 +25,15 @@ public final class Red {
     private final char[] broadcast;
     private final char[] ip;
     private ArrayList<String> ipsConectadas;
+    private Conexion conexion;
+    private boolean esSegura;
      
     /**
      * 
+     * @param esSegura
      * @throws Exception 
      */
-    public Red() throws Exception{
+    public Red(boolean esSegura) throws Exception{
         
         this.puerto = 2317;
         this.numBits=32;
@@ -36,10 +43,27 @@ public final class Red {
         this.broadcast = new char[numBits];
         this.mascara = new char[numBits];
         this.ipsConectadas = new ArrayList<>();
+        this.ipsConectadas.add("192.168.0.4");  //Pruebas
+        
+        this.esSegura = esSegura;
+        
+        if(this.esSegura){ this.conexion = new conexiones.cliente.Segura(this.convertirDireccionBinariaADecimal(this.ip), this.puerto); } 
+        else { this.conexion = new conexiones.cliente.Insegura(this.convertirDireccionBinariaADecimal(this.ip), this.puerto); } 
         
         this.obtenerProtocoloRedEquipoLocal();
-        this.ipsConectadas.add("192.168.0.2");
-        //this.escanearIPSConectadasARed();
+    }
+    
+    public Red() throws Exception{
+        
+        this.puerto = 2317;
+        this.numBits=32;
+        this.octeto=8;
+        this.ip = new char[numBits];
+        this.red = new char[numBits];
+        this.broadcast = new char[numBits];
+        this.mascara = new char[numBits];        
+        this.esSegura = false;
+        this.obtenerProtocoloRedEquipoLocal();
     }
     
     /**
@@ -49,7 +73,7 @@ public final class Red {
      */
     private void obtenerProtocoloRedEquipoLocal() throws Exception{
 
-        String ip = null;
+        String ip = "";
         String mascara = null;
         
         Enumeration<NetworkInterface> n = NetworkInterface.getNetworkInterfaces(); //Obtiene todas las interfaces activas de red del equipo.
@@ -62,7 +86,7 @@ public final class Red {
                 for (; a.hasMoreElements();){
                     
                     InetAddress addr = a.nextElement();
-                    
+                        
                     if(addr.getHostAddress().startsWith("192")){ //Verifica que la direccion de host sea de la red local.
                         
                         ip = addr.getHostAddress();
@@ -70,9 +94,12 @@ public final class Red {
                         break;
                     }
                 }
+                
+                if(ip.startsWith("192"))
+                    break;
         }
         
-        if(ip == null && mascara==null)
+        if(mascara==null)
             throw new Exception("Equipo no conectado a red.");
         
         this.guardarIPEnBinario(ip);
@@ -217,13 +244,35 @@ public final class Red {
      * @throws UnknownHostException
      * @throws IOException 
      */
-    private boolean hacerPing(String ip) throws UnknownHostException, IOException{
+    private boolean hacerPing(String ip) throws UnknownHostException, IOException, Exception{
 
+        System.out.print("Escaneando direccion IP: " + ip);
         if(InetAddress.getByName(ip).isReachable(1000)){
-         
-            System.out.println(ip);
+            
+            System.out.print(" -> Alcanzada");
+            try{
+                
+                this.conexion.crearConexion();
+                System.out.println(" -> ¡SI es mi amiguito!");
+                
+                this.conexion.establecerES(null, null);
+                DataInputStream entrada = this.conexion.obtenerEntrada();
+                DataOutputStream salida = this.conexion.obtenerSalida();
+                
+                salida.write(("¿Eres mi amiguito?").getBytes());
+                salida.flush();
+                
+                if(entrada.read() > 0)
+                    this.ipsConectadas.add(ip);
+                
+                this.conexion.cerrarConexiones();
+            } catch(ConnectException ex){
+            
+                System.out.println(" -> ¡NO es mi amiguito!");
+            }
+            
             return true;
-        }
+        } else { System.out.println(" -> No alcanzada"); }
         
         return false;
     }
@@ -233,7 +282,7 @@ public final class Red {
      * Analiza la red donde se encuentra el equipo en busca de ips activas.
      * @throws IOException 
      */
-    public void escanearIPSConectadasARed() throws IOException{
+    public void escanearIPSConectadasARed() throws IOException, Exception{
         
         String[] redPartes = this.convertirDireccionBinariaADecimal(red).split("\\.");
         String[] broadcastPartes = this.convertirDireccionBinariaADecimal(broadcast).split("\\.");
@@ -241,17 +290,18 @@ public final class Red {
         String ipActual;
         
         int[] broadcastPartesInt = {Integer.parseInt(broadcastPartes[0]), Integer.parseInt(broadcastPartes[1]), Integer.parseInt(broadcastPartes[2]), Integer.parseInt(broadcastPartes[3])};
-        int[] ipActualPartesInt = {Integer.parseInt(ipActualPartes[0]), Integer.parseInt(ipActualPartes[1]), Integer.parseInt(ipActualPartes[2]), Integer.parseInt(ipActualPartes[3])+1};
+        //int[] ipActualPartesInt = {Integer.parseInt(ipActualPartes[0]), Integer.parseInt(ipActualPartes[1]), Integer.parseInt(ipActualPartes[2]), Integer.parseInt(ipActualPartes[3])+1};
+        int[] ipActualPartesInt = {Integer.parseInt(ipActualPartes[0]), Integer.parseInt(ipActualPartes[1]), Integer.parseInt(ipActualPartes[2]), Integer.parseInt(ipActualPartes[3])+0};
         
-        while(  ipActualPartesInt[0] < broadcastPartesInt[0] ||
-                ipActualPartesInt[1] < broadcastPartesInt[1] ||
-                ipActualPartesInt[2] < broadcastPartesInt[2] ||
-                ipActualPartesInt[3] < broadcastPartesInt[3]-1){
+        while(  ipActualPartesInt[0] < 192 || //COLOCAR LAS PARTES DEL BROADCASR
+                ipActualPartesInt[1] < 168 ||
+                ipActualPartesInt[2] < 0 ||
+                //ipActualPartesInt[3] < broadcastPartesInt[3]-1){
+                ipActualPartesInt[3] < 10){
             
             ipActual=ipActualPartesInt[0] + "." + ipActualPartesInt[1] + "." + ipActualPartesInt[2] + "." + ipActualPartesInt[3];
             
-            if(this.hacerPing(ipActual))
-                this.ipsConectadas.add(ipActual);
+            this.hacerPing(ipActual);
                 
             ipActualPartesInt[3] = ipActualPartesInt[3]+1;
             
@@ -260,7 +310,8 @@ public final class Red {
                 ipActualPartesInt[3]=0;
                 ipActualPartesInt[2] = ipActualPartesInt[2]+1;
                 
-                if(ipActualPartesInt[2] > 255){
+                if(ipActualPartesInt[2] > 255
+                        ){
                     
                     ipActualPartesInt[2]=0;
                     ipActualPartesInt[1] = ipActualPartesInt[1]+1;
@@ -273,6 +324,14 @@ public final class Red {
                 }
             }
                 
+        }
+        
+        if(this.ipsConectadas.size() <= 0 ){
+            
+            System.out.println("Escaneo finalizado: " + this.ipsConectadas.size() + " direcciones IP amigas :'(");
+        } else {
+            
+            System.out.println("Escaneo finalizado: " + this.ipsConectadas.size() + " direcciones IP amigas :D");
         }
     }
 
@@ -290,4 +349,6 @@ public final class Red {
         
         return this.puerto;
     }
+
+    public String obtenerMascara() { return this.convertirDireccionBinariaADecimal(this.mascara); }
 }

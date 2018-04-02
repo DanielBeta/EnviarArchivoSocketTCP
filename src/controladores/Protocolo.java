@@ -10,6 +10,8 @@ public class Protocolo {
     public final String ACTUALIZAR_REPOSITORIO="0011";
     public final String REMOVER_ARCHIVO="0100";
     public final String CARGAR_ARCHIVO="0101";
+    public final String OBTENER_IPS="1111";
+    public final String PUBLICAR_ARCHIVO="0110";
     private final String ARCHIVO_NO_ENCONTRADO="Archivo no encontrado";
     private final String CARACTER_SEPARACION="\\|";
     private Repositorio repositorio;
@@ -33,6 +35,10 @@ public class Protocolo {
            case "0000" : {
                
                respuesta = this.repositorio.listarCanciones();
+               
+               if(respuesta.isEmpty())
+                   respuesta = "No hay archivos en el repositorio local.";
+               
                break;
            }
            
@@ -62,6 +68,7 @@ public class Protocolo {
                
                this.archivador.vaciarArchivo();
                this.repositorio.cargarObjetos(this.archivador.cargarArchivos());
+               respuesta = "Archivo descargado al repositorio local.";
                break;
            }
            
@@ -70,7 +77,7 @@ public class Protocolo {
                this.archivador.removerArchivo(peticionPartes[1]);
                this.archivador.vaciarArchivo();
                this.repositorio.cargarObjetos(this.archivador.cargarArchivos());
-               respuesta = "Se ha removido el archivo: " + peticionPartes[1];
+               respuesta = "Se ha removido el archivo: " + peticionPartes[1] + " del repositorio local.";
                break;
            }
            
@@ -79,7 +86,21 @@ public class Protocolo {
                this.archivador.cargarArchivos(peticionPartes[1]);
                this.archivador.vaciarArchivo();
                this.repositorio.cargarObjetos(this.archivador.cargarArchivos());
-               respuesta = "Cargar archivo a respositorio local.";
+               respuesta = "Se ha cargado el archivo: " + 
+                       peticionPartes[1].split("/")[peticionPartes[1].split("/").length-1]
+                       + " al repositorio local.";
+               break;
+           }
+           
+           case OBTENER_IPS : {
+               
+               respuesta = OBTENER_IPS;
+               break;
+           }
+           
+           case PUBLICAR_ARCHIVO: {
+               
+               respuesta = PUBLICAR_ARCHIVO;
                break;
            }
            

@@ -51,6 +51,8 @@ public class Repositorio {
 
     public void cargarObjetos(ArrayList<String[]> archivos) throws Exception {
         
+        this.archivos = new ArrayList<>();
+        
         for(String[] archivo : archivos)
             this.agregarArchivo(new ArchivoMusica(archivo[0], archivo[2], archivo[1]));
     }

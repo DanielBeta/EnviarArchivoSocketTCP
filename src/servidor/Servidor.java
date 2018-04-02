@@ -1,7 +1,9 @@
 package servidor;
 
+import cliente.Cliente;
+import conexiones.servidor.Conexion;
 import controladores.Protocolo;
-import interfaces.Consola;
+import interfaces.InterfazCliente;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -11,15 +13,10 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import javax.net.ssl.SSLServerSocket;
-import javax.net.ssl.SSLServerSocketFactory;
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
+import javax.swing.JOptionPane;
 
 /**
  *
@@ -27,60 +24,53 @@ import javax.net.ssl.SSLSocketFactory;
  */
 public class Servidor {
     
-    private Protocolo protocolo;
-    private Consola consola;
+    private final Protocolo protocolo;
     private final Red RED;
     private final int PUERTO;  // you may change this
-    
-    private DataInputStream entrada;
-    private DataOutputStream salida;
-    //private ServerSocket servidor = null;
-    private SSLServerSocket servidor = null;
-    private SSLSocket cliente = null;
-    
-    
     
     private String mensaje;
     private String peticion;
     private String respuesta;
+    private final Conexion conexion;
+    private final boolean esSegura;
 
-    public Servidor() throws IOException, Exception{
+    public Servidor(boolean esSegura) throws IOException, Exception{
         
-        this.RED = new Red();
+        this.RED = new Red(esSegura);
+        
+        System.out.println("Direccion IP: " + this.RED.obtenerIp());
+        System.out.println("Mascara de Subred: " + this.RED.obtenerMascara());
+        
         this.PUERTO = this.RED.obtenerPuerto();
-        
         this.protocolo = new Protocolo();
-    }
-    
-    public void asignarConsola(Consola consola){
+        this.RED.escanearIPSConectadasARed(); //revisar el constructor de la clase Red
         
-        this.consola = consola;
+        this.esSegura = esSegura;
+        
+        if(this.esSegura){ this.conexion = new conexiones.servidor.Segura(this.PUERTO); } 
+        else { this.conexion = new conexiones.servidor.Insegura(this.PUERTO); }
+        this.conexion.crearConexion();
+        
     }
     
     public void subir() throws IOException, Exception{
   
         try {
 
-          //servidor = new ServerSocket(PUERTO);
-            SSLServerSocketFactory sslServerSocketFactory = (SSLServerSocketFactory) 
-            SSLServerSocketFactory.getDefault();
-            this.servidor = (SSLServerSocket) 
-            sslServerSocketFactory.createServerSocket(PUERTO);
-
           while (true) {
 
             this.mensaje="[SERVIDOR] Esperando cliente...";
-            this.consola.mostrarMensajesServidor(this.mensaje);
+            System.out.println(this.mensaje);
             this.peticion="";
-            
-            try {
+                    
+            this.conexion.esperarCliente();
+            this.conexion.establecerES(null, null);
+            this.mensaje="[SERVIDOR] Conexion establecida con el cliente";
+            System.out.println(this.mensaje);
+            DataInputStream entrada = this.conexion.obtenerEntrada();
+            DataOutputStream salida = this.conexion.obtenerSalida();
                 
-                cliente = (SSLSocket)servidor.accept();
-                this.mensaje="[SERVIDOR] Conexion establecida con el cliente: " + cliente; 
-                this.consola.mostrarMensajesServidor(this.mensaje);
                 
-                entrada = new DataInputStream(cliente.getInputStream());
-                salida = new DataOutputStream(cliente.getOutputStream());
                 
                 /**************************************************************
                  * 
@@ -89,9 +79,9 @@ public class Servidor {
                  **************************************************************/
                 
                     this.mensaje="[SERVIDOR] Esperando peticion del cliente...";
-                    this.consola.mostrarMensajesServidor(this.mensaje);
+                    System.out.println(this.mensaje);
 
-                    byte[] bytes = new byte[10000];
+                    byte[] bytes = new byte[100];
                     
                     /* Almacena los bytes de la peticion del cliente */
                     entrada.read(bytes);               
@@ -101,7 +91,7 @@ public class Servidor {
                         this.peticion += (char)b;
                     
                     this.mensaje="[SERVIDOR] Esta es la peticion del cliente: " + this.peticion;
-                    this.consola.mostrarMensajesServidor(this.mensaje);
+                    System.out.println(this.mensaje);
                 
                 /**************************************************************
                  * 
@@ -112,18 +102,9 @@ public class Servidor {
                 this.respuesta = this.protocolo.gestionarPeticion(this.peticion);
                     
                 /* Analiza la peticion proveniente del cliente */
-                this.evaluarRespuesta(this.respuesta);   
-            } finally {
-                
-              if (entrada != null) entrada.close();
-              if (salida != null) salida.close();
-              if (cliente!=null) cliente.close();
+                this.evaluarRespuesta(this.respuesta); 
             }
-          }
-        } finally {
-            
-          if (servidor != null) servidor.close();
-        }
+        } finally { this.conexion.cerrarConexiones(); }
     }
     
     public void evaluarRespuesta(String respuesta) throws Exception{
@@ -138,10 +119,10 @@ public class Servidor {
 
             this.respuesta = "Enviando archivo: " + respuesta;
             this.mensaje="[SERVIDOR] Responder al cliente: " + this.respuesta;
-            this.consola.mostrarMensajesServidor(this.mensaje);
+            System.out.println(this.mensaje);
 
-            salida.write(mybytearray,0,mybytearray.length);
-            salida.flush(); 
+            this.conexion.obtenerSalida().write(mybytearray,0,mybytearray.length);
+            this.conexion.obtenerSalida().flush(); 
         } else {
         
             if(respuesta.equals(this.protocolo.archivoNoEncontradoComando())){
@@ -151,14 +132,34 @@ public class Servidor {
             } else {
 
                 if(respuesta.equals(this.protocolo.descargarArchivoComando())){
+                    
                     this.buscarArchivoLAN("S" + this.peticion.substring(1));
-                } 
+                } else{
+                    
+                    if(respuesta.equals(this.protocolo.OBTENER_IPS)){
+                        
+                        String ips="";
+                        for(String ip : this.RED.obtenerIPSEnRed()){
+
+                            ips = ip + "|";
+                        }
+
+                        this.respuesta = ips;
+                    } else {
+                        
+                        if(respuesta.equals(this.protocolo.PUBLICAR_ARCHIVO)){
+                         
+                            String[] peticionPartes = this.peticion.split(this.protocolo.comandoSeparacion());
+                            this.publicarArchivo(peticionPartes[1], peticionPartes[2]);
+                        }                        
+                    }
+                }
             }
             
             this.mensaje="[SERVIDOR] Responder al cliente: " + this.respuesta;
-            this.consola.mostrarMensajesServidor(this.mensaje);
-            salida.write((this.respuesta).getBytes());
-            salida.flush();            
+            System.out.println(this.mensaje);
+            this.conexion.obtenerSalida().write((this.respuesta).getBytes());
+            this.conexion.obtenerSalida().flush();            
         }
     }
     
@@ -169,34 +170,32 @@ public class Servidor {
     
     private void buscarArchivoLAN(String peticion) throws Exception{
         
-        
-        
+        conexiones.cliente.Conexion conexionCliente;
         String respuesta = "";
         ArrayList<String> ips = this.RED.obtenerIPSEnRed();
-        int puerto = this.RED.obtenerPuerto();
+        DataInputStream in;
+        DataOutputStream out;
         
         for(String ip : ips){
             
+            if(this.esSegura){ conexionCliente = new conexiones.cliente.Segura(ip, this.PUERTO); } 
+            else { conexionCliente = new conexiones.cliente.Insegura(ip, this.PUERTO); }
+            conexionCliente.crearConexion();
+            conexionCliente.establecerES(null, null);
+            
             this.mensaje="[SERVIDOR] Buscar archivo donde mi amiguito " + ip;
-            this.consola.mostrarMensajesServidor(this.mensaje);
-            
-           // Socket s = new Socket(ip, puerto);
-            SSLSocket s;
-            
-            SSLSocketFactory sslSocketFactory = (SSLSocketFactory) 
-            SSLSocketFactory.getDefault();
-            s = (SSLSocket) 
-            sslSocketFactory.createSocket(ip, puerto);
-                   
-            DataInputStream in = new DataInputStream(s.getInputStream());
-            DataOutputStream out = new DataOutputStream(s.getOutputStream());
+            System.out.println(this.mensaje);
+                
+            in = conexionCliente.obtenerEntrada();
+            out = conexionCliente.obtenerSalida();           
 
             out.write(peticion.getBytes());
             out.flush();
             
             if(peticion.contains(this.protocolo.descargarArchivoComando())){
-                this.descargarArchivoLAN(s, peticion);
-                this.respuesta = "Archivo descargado.";
+
+                this.descargarArchivoLAN(peticion, conexionCliente);
+                respuesta = this.respuesta;
             }
             else{
             
@@ -208,7 +207,7 @@ public class Servidor {
                     respuesta += (char)b;
             }
             
-            s.close();
+            conexionCliente.cerrarConexiones();
             in.close();
             out.close();
             
@@ -219,12 +218,16 @@ public class Servidor {
         }
     }
     
-    private void descargarArchivoLAN(Socket s, String peticion) throws Exception{
+    private void descargarArchivoLAN(String peticion, conexiones.cliente.Conexion conexion) throws Exception{
   
-        int bytesRead, current=0;
+        int bytesRead, current;
 
         byte [] mybytearray  = new byte [100];
-        InputStream is = s.getInputStream();
+        InputStream is;
+
+        if(esSegura){ is = ((conexiones.cliente.Segura)conexion).obtenerSocket().getInputStream();}
+        else { is = (((conexiones.cliente.Insegura)conexion).obtenerSocket()).getInputStream(); }
+        
         String ruta = this.protocolo.obtenerPathRepositorio() + peticion.split(this.protocolo.comandoSeparacion())[1];
         FileOutputStream fos = new FileOutputStream(ruta.trim());
         BufferedOutputStream bos = new BufferedOutputStream(fos);
@@ -243,32 +246,44 @@ public class Servidor {
         this.protocolo.gestionarPeticion("S"+this.protocolo.ACTUALIZAR_REPOSITORIO);
     }
     
+    
+    private void publicarArchivo(String ip, String archivo){
+        
+    }
+    
     public static void main(String[] args) {
+
+        String firma = "myKeystone.jks";
+        String contrasena = "d1053837737d.";
+        System.setProperty("javax.net.ssl.keyStore", firma);
+        System.setProperty("javax.net.ssl.keyStorePassword",contrasena);
+        System.setProperty("javax.net.ssl.trustStore", firma);
+        System.setProperty("javax.net.ssl.trustStorePassword", contrasena);
         
-        System.setProperty("javax.net.ssl.keyStore","myKeystone.jks");
-        System.setProperty("javax.net.ssl.keyStorePassword","d1053837737d.");
+        int respuesta = JOptionPane.showConfirmDialog(null, "¿Desea conexion segura con cifrado de mensajes?", "Atencion", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        boolean esSeguro = false;
         
-        System.setProperty("javax.net.ssl.trustStore", "myKeystone.jks");
-        System.setProperty("javax.net.ssl.trustStorePassword", "d1053837737d.");
+        if(respuesta == 0)
+            esSeguro = true;
         
+        InterfazCliente ic;
         Servidor s;
-        Consola c;
+        Cliente cliente;
         
         try {
             
-            s = new Servidor();
+            cliente = new Cliente(esSeguro);
+            ic = new InterfazCliente(cliente);
+            ic.asignarDatosDeProductosATabla(new ArrayList<>());
+            ic.setLocationRelativeTo(null);
+            ic.setVisible(true);
             
-            c = new Consola(s);
-            c.setLocationRelativeTo(null);
-            c.setVisible(true);
-            
-            s.asignarConsola(c);
+            JOptionPane.showMessageDialog(null, "Por favor espere mientras se escanea la red.");
+            s = new Servidor(esSeguro);
             s.subir();
             } catch (Exception ex) {
                 
             Logger.getLogger(Servidor.class.getName()).log(Level.SEVERE, null, ex);
         } 
-    }
-    
-    
+    } 
 }

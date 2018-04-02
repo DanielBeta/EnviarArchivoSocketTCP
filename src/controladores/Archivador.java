@@ -32,6 +32,7 @@ public class Archivador {
         
         this.rutaRepositorio = "src//repositorio//";
         this.nombreArchivo = "archivos.txt";
+        this.vaciarArchivo();
     }
     
     
@@ -170,5 +171,4 @@ public class Archivador {
         ruta = ((this.getRutaRepositorio()+ruta.split("/")[ruta.split("/").length-1]).replace("//", "/")).trim();
         new FileOutputStream(ruta.trim());
     }
-    
 }
